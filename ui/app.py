@@ -9,7 +9,7 @@ from textual.binding import Binding
 
 
 class ServerPanel(Static):
-    def __init__(self, label: str, cfg, key: str):
+    def __init__(self, label, cfg, key):
         super().__init__()
         self.label = label
         self.cfg = cfg
@@ -45,13 +45,14 @@ class MainMenu(Screen):
                 yield ServerPanel("SERVER B", self.app_ref.cfg, "server_b")
             with Vertical(id="right"):
                 yield Label("[bold cyan]TUNNEL LAB v" + self.app_ref.version + "[/bold cyan]")
-                yield Label("Ubuntu Tunnel Compatibility & Validation Framework")
+                yield Label("Two-Server Tunnel Compatibility Framework")
                 yield Static("", id="spacer")
                 yield ListView(
                     ListItem(Label("1) Configure servers"), id="cfg"),
-                    ListItem(Label("2) Select tunnels"), id="sel"),
-                    ListItem(Label("3) Run tests"), id="run"),
-                    ListItem(Label("4) Exit"), id="exit"),
+                    ListItem(Label("2) Setup A <-> B channel"), id="setup"),
+                    ListItem(Label("3) Select tunnels"), id="sel"),
+                    ListItem(Label("4) Run tests"), id="run"),
+                    ListItem(Label("5) Exit"), id="exit"),
                     id="menu",
                 )
         yield Footer()
@@ -60,14 +61,16 @@ class MainMenu(Screen):
         self.query_one("#menu", ListView).focus()
 
     def on_list_view_selected(self, event):
-        item_id = event.item.id
-        if item_id == "cfg":
+        i = event.item.id
+        if i == "cfg":
             self.app_ref.push_screen(ConfigScreen(self.app_ref))
-        elif item_id == "sel":
+        elif i == "setup":
+            self.app_ref.push_screen(SetupScreen(self.app_ref))
+        elif i == "sel":
             self.app_ref.push_screen(TunnelSelectScreen(self.app_ref))
-        elif item_id == "run":
+        elif i == "run":
             self.app_ref.push_screen(RunScreen(self.app_ref))
-        elif item_id == "exit":
+        elif i == "exit":
             self.app_ref.exit()
 
 
@@ -109,6 +112,36 @@ class ConfigScreen(Screen):
         for inp in self.query(Input):
             key, field = inp.id.split("__", 1)
             self.app_ref.cfg.set(inp.value, key, field)
+        self.app_ref.pop_screen()
+
+
+class SetupScreen(Screen):
+    BINDINGS = [Binding("escape", "back", "Back", show=True)]
+
+    def __init__(self, app_ref):
+        super().__init__()
+        self.app_ref = app_ref
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Vertical():
+            yield Label("[bold]Setup A <-> B control channel[/bold]  (Esc=back)")
+            yield RichLog(id="log", highlight=True, markup=True)
+        yield Footer()
+
+    def on_mount(self):
+        self.run_worker(self._do_setup, thread=True)
+
+    def _do_setup(self):
+        log = self.query_one("#log", RichLog)
+        try:
+            self.app.call_from_thread(log.write, "[cyan]deploying agent to server B...[/cyan]")
+            self.app_ref.orch.setup_servers()
+            self.app.call_from_thread(log.write, "[green]channel ready[/green]")
+        except Exception as e:
+            self.app.call_from_thread(log.write, f"[red]setup failed: {e}[/red]")
+
+    def action_back(self):
         self.app_ref.pop_screen()
 
 
@@ -181,6 +214,14 @@ class RunScreen(Screen):
     def on_mount(self):
         self.run_worker(self._run_all, thread=True)
 
+    def _line_for(self, name, stages):
+        if not stages:
+            return f"    {name}: (not run)"
+        parts = []
+        for k, v in stages.items():
+            parts.append(f"{k}={'OK' if v else 'FAIL'}")
+        return f"    {name}: " + "  ".join(parts)
+
     def _run_all(self):
         log = self.query_one("#log", RichLog)
         selected = self.app_ref.cfg.get("tests", "enabled", default=[]) or []
@@ -189,23 +230,32 @@ class RunScreen(Screen):
             return
         results = []
         for tid in selected:
-            self.app.call_from_thread(log.write, f"[cyan]>>> running {tid}...[/cyan]")
+            self.app.call_from_thread(log.write, f"[cyan]>>> {tid} ...[/cyan]")
             r = self.app_ref.orch.run_test(tid)
             results.append(r)
             color = "green" if r.get("status") == "PASS" else "red"
-            self.app.call_from_thread(log.write, f"[{color}]{r['tunnel']}: {r['status']}[/{color}]")
+            self.app.call_from_thread(log.write, f"[{color}][{r['tunnel']}] {r['status']}[/{color}]")
+            self.app.call_from_thread(log.write, "  DIRECT  (A -> B):")
+            self.app.call_from_thread(log.write, self._line_for("direct", r.get("direct", {})))
+            self.app.call_from_thread(log.write, "  REVERSE (B -> A):")
+            self.app.call_from_thread(log.write, self._line_for("reverse", r.get("reverse", {})))
+            if r.get("reason"):
+                self.app.call_from_thread(log.write, f"  reason: {r['reason']}")
+
+        summary = self.app_ref.orch.advisor.summary(results)
+        for line in summary.splitlines():
+            self.app.call_from_thread(log.write, line)
 
         outdir = Path(__file__).resolve().parent.parent / "results"
         outdir.mkdir(parents=True, exist_ok=True)
         fname = outdir / f"summary-{self.app_ref.orch.log.session}.json"
         with open(fname, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+            json.dump(results, f, indent=2, ensure_ascii=False)
         self.app.call_from_thread(log.write, f"saved: {fname}")
 
     def action_back(self):
         self.app_ref.pop_screen()
-
-
+        
 class TunnelLabApp(TApp):
     CSS = """
     Screen { layout: vertical; }

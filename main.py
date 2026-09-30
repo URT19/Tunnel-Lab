@@ -8,7 +8,7 @@ from core.orchestrator import Orchestrator
 from core.logger import Logger
 from ui.app import TunnelLabApp
 
-VERSION = "0.2.0"
+VERSION = "0.4.0"
 
 def main():
     base = Path(__file__).parent
