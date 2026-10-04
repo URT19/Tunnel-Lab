@@ -6,6 +6,7 @@ class TunnelModule(ABC):
     name = ""
     category = ""
     description = ""
+    family = "ipv4"   # "ipv4" or "ipv6"
 
     # ---- commands executed on Server A (local shell) ----
     @abstractmethod

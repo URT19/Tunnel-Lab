@@ -1,34 +1,48 @@
 from tunnels.base import TunnelModule
 
+
 class SSHTun(TunnelModule):
     id = "ssh_tun"
-    name = "SSH TUN"
+    name = "SSH SOCKS5"
     category = "SSH"
-    description = "SSH -w tun device"
+    description = "SSH dynamic SOCKS5 proxy (-D)"
+    family = "ipv4"
 
-    def check_dependencies(self, ctx, ex):
-        ex.run("command -v ssh >/dev/null 2>&1")
+    SOCKS_PORT = 1080
 
-    def prepare(self, ctx, ex): pass
+    def commands_for_a(self, ctx):
+        # Kill any leftover local SOCKS listeners before the test
+        return [
+            f"pkill -f 'ssh .* -D {self.SOCKS_PORT}' 2>/dev/null || true",
+            "rm -f /tmp/tunnel-lab-socks-a.pid /tmp/tunnel-lab-socks-a.log "
+            "/tmp/tunnel-lab-socks-a.sh 2>/dev/null || true",
+        ]
 
-    def configure_server_a(self, ctx, ex):
-        i = ctx.interface_name
-        ex.run(f"ip tuntap add dev {i} mode tun 2>/dev/null || true")
-        ex.run(f"ip addr add {ctx.tunnel_local_ip}/30 dev {i}")
-        ex.run(f"ip link set {i} up")
+    def commands_for_b(self, ctx):
+        # Nothing to configure on B; sshd already supports -D from the client
+        return []
 
-    def configure_server_b(self, ctx, ex):
-        i = ctx.interface_name
-        ex.run(f"ip tuntap add dev {i} mode tun 2>/dev/null || true")
-        ex.run(f"ip addr add {ctx.tunnel_remote_ip}/30 dev {i}")
-        ex.run(f"ip link set {i} up")
+    def reverse_commands_for_a(self, ctx):
+        return self.commands_for_a(ctx)
 
-    def verify(self, ctx, ex):
-        rc, out, _ = ex.run(f"ip link show {ctx.interface_name}")
-        return rc == 0 and "UP" in out
+    def reverse_commands_for_b(self, ctx):
+        return [
+            f"pkill -f 'ssh .* -D {self.SOCKS_PORT}' 2>/dev/null || true",
+            "rm -f /tmp/tunnel-lab-socks-b.pid /tmp/tunnel-lab-socks-b.log "
+            "/tmp/.tl-sshpass 2>/dev/null || true",
+        ]
 
-    def test_traffic(self, ctx, ex):
-        return self.verify(ctx, ex)
+    def cleanup_commands_a(self, ctx):
+        return [
+            f"pkill -f 'ssh .* -D {self.SOCKS_PORT}' 2>/dev/null || true",
+            "rm -f /tmp/tunnel-lab-socks-a.pid /tmp/tunnel-lab-socks-a.log "
+            "/tmp/tunnel-lab-socks-a.sh 2>/dev/null || true",
+        ]
 
-    def cleanup(self, ctx, ex):
-        ex.run(f"ip link del {ctx.interface_name} 2>/dev/null || true")
+    def cleanup_commands_b(self, ctx):
+        return [
+            f"pkill -f 'ssh .* -D {self.SOCKS_PORT}' 2>/dev/null || true",
+            "rm -f /tmp/tunnel-lab-socks-b.pid /tmp/tunnel-lab-socks-b.log "
+            "/tmp/.tl-sshpass 2>/dev/null || true",
+        ]
+

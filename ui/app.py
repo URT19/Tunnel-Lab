@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, Input, RichLog
 from textual.screen import Screen
 from textual.binding import Binding
+from ui.config_screen import ConfigScreen
 
 
 class ServerPanel(Static):
@@ -73,46 +74,6 @@ class MainMenu(Screen):
         elif i == "exit":
             self.app_ref.exit()
 
-
-class ConfigScreen(Screen):
-    BINDINGS = [Binding("escape", "back", "Back", show=True)]
-
-    def __init__(self, app_ref):
-        super().__init__()
-        self.app_ref = app_ref
-
-    def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
-        with Vertical():
-            yield Label("[bold]Configure Servers[/bold]  (Tab=next, Enter=save, Esc=back)")
-            for key in ("server_a", "server_b"):
-                for field in ("host", "user", "ssh_port", "auth", "password", "key_path"):
-                    cur = str(self.app_ref.cfg.get(key, field, default="") or "")
-                    yield Label(f"{key}.{field}")
-                    yield Input(value=cur, id=f"{key}__{field}")
-        yield Footer()
-
-    def on_mount(self):
-        inputs = self.query(Input)
-        if inputs:
-            inputs[0].focus()
-
-    def on_input_submitted(self, event):
-        inputs = list(self.query(Input))
-        idx = inputs.index(event.input)
-        if idx + 1 < len(inputs):
-            inputs[idx + 1].focus()
-        else:
-            self._save()
-
-    def action_back(self):
-        self._save()
-
-    def _save(self):
-        for inp in self.query(Input):
-            key, field = inp.id.split("__", 1)
-            self.app_ref.cfg.set(inp.value, key, field)
-        self.app_ref.pop_screen()
 
 
 class SetupScreen(Screen):
@@ -262,8 +223,14 @@ class TunnelLabApp(TApp):
     #left { width: 40%; border: round green; padding: 1; }
     #right { width: 60%; border: round cyan; padding: 1; }
     ListView { height: 100%; }
-    Input { margin: 0 0 1 0; }
+    Input { margin: 0; height: 3; }
+    #colA { width: 50%; border: round green; padding: 1; margin: 0 1 0 0; }
+    #colB { width: 50%; border: round cyan;  padding: 1; margin: 0 0 0 1; }
+    #hint { height: 1; }
+    #footer_hint { height: 1; dock: bottom; }
     #log { height: 100%; border: round cyan; }
+    Label { margin: 1 0 0 0; }
+    Button { margin: 1 0 0 0; }
     """
     BINDINGS = [Binding("ctrl+c", "quit", "Quit", show=True)]
 

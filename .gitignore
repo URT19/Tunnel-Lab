@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+logs/*.log
+logs/*.jsonl
+logs/agent_copy.txt
+logs/tunnels_status.json
+results/*.json
+backups/*.bak
+config.yaml
+.env
+*.tar.gz
+*.swp
+.DS_Store

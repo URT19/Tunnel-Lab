@@ -1,18 +1,14 @@
-version: 0.2.0
+version: 9.2.0
 server_a:
   host: ""
   ssh_port: 22
   user: root
-  auth: key
   password: ""
-  key_path: ""
 server_b:
   host: ""
   ssh_port: 22
   user: root
-  auth: key
   password: ""
-  key_path: ""
 network:
   control_net: 10.254.0.0/24
   tunnel_pool: 10.250.0.0/16

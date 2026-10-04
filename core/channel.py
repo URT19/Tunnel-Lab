@@ -1,10 +1,49 @@
-import socket, json, threading, time
+import socket, json, threading, time, os
+from pathlib import Path
 from core.protocol import pack, unpack_header
 
 
-class Channel:
-    """TCP + JSON control channel between Server A and Server B."""
+# ---------------- persistent message bus (file) ----------------
+BUS_FILE = Path.cwd() / "logs" / "bus.jsonl"
 
+
+def bus_emit(msg: dict):
+    try:
+        BUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps({"ts": time.time(), "msg": msg}, ensure_ascii=False)
+        with open(BUS_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def bus_tail(n: int = 50):
+    try:
+        if not BUS_FILE.exists():
+            return []
+        with open(BUS_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        out = []
+        for line in lines[-n:]:
+            try:
+                out.append(json.loads(line))
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return []
+
+
+def bus_clear():
+    try:
+        if BUS_FILE.exists():
+            BUS_FILE.unlink()
+    except Exception:
+        pass
+
+
+# ---------------- channel ----------------
+class Channel:
     def __init__(self, logger=None):
         self.log = logger
         self.sock = None
@@ -12,7 +51,6 @@ class Channel:
         self.on_message = None
         self.alive = False
 
-    # ---------- client side (Server A connects to B) ----------
     def connect(self, host, port, timeout=10):
         self.sock = socket.create_connection((host, port), timeout=timeout)
         self.sock.settimeout(None)
@@ -20,21 +58,14 @@ class Channel:
         threading.Thread(target=self._recv_loop, daemon=True).start()
         return True
 
-    # ---------- server side (Agent on B) ----------
-    def serve(self, conn):
-        self.sock = conn
-        self.alive = True
-        self._recv_loop()
-
-    # ---------- send ----------
     def send(self, msg: dict):
         if not self.sock:
             raise RuntimeError("channel not connected")
         if self.log:
             self.log.event("channel.send", msg)
+        bus_emit({"dir": "A->B", **msg})
         self.sock.sendall(pack(msg))
 
-    # ---------- receive ----------
     def _recv_loop(self):
         while self.alive:
             try:
@@ -56,6 +87,7 @@ class Channel:
                     continue
                 if self.log:
                     self.log.event("channel.recv", msg)
+                bus_emit({"dir": "B->A", **msg})
                 if self.on_message:
                     try:
                         self.on_message(msg)
@@ -74,9 +106,9 @@ class Channel:
 
 
 class ChannelClient:
-    """Synchronous request/response helper for Server A."""
-
     def __init__(self, host, port, logger=None, timeout=30):
+        self.host = host
+        self.port = port
         self.ch = Channel(logger=logger)
         self.ch.connect(host, port)
         self.timeout = timeout
@@ -109,3 +141,13 @@ class ChannelClient:
 
     def close(self):
         self.ch.close()
+
+
+def ping_channel(host, port, logger=None, timeout=5) -> dict:
+    try:
+        ch = ChannelClient(host, int(port), logger=logger, timeout=timeout)
+        resp = ch.request({"type": "PING"}, expect="PONG", timeout=timeout)
+        ch.close()
+        return {"ok": True, "pong": resp}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
