@@ -8,6 +8,8 @@ class TunnelModule(ABC):
     description = ""
     family = "ipv4"
     applicable_stages = ("iface_a", "iface_b", "icmp", "tcp", "udp")
+    group = None
+    label = ""
 
     def setup(self, ctx, orch):
         pass

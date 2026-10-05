@@ -162,8 +162,8 @@ class SSHSetup:
 
     def open_firewall(self, port=51888, remote_dir=None):
         """Open control port + common tunnel ports on B (ufw + iptables + firewalld)."""
-        tcp_ports = [port, 9991]
-        udp_ports = [4789, 51820, 500, 4500, 8472, 9992]
+        tcp_ports = [port, 9991, 53788, 53798]
+        udp_ports = [4789, 51820, 500, 4500, 8472, 9992, 53787, 53789, 53797, 53799]
         ips = ["47"]  # GRE (proto 47)
         cmds = []
         for p_ in tcp_ports:
@@ -195,8 +195,8 @@ class SSHSetup:
     def open_firewall_local(self, port=51888):
         """Open control port + tunnel/payload ports on Server A (local)."""
         import subprocess
-        tcp_ports = [port, 9991]
-        udp_ports = [4789, 51820, 500, 4500, 8472, 9992]
+        tcp_ports = [port, 9991, 53788, 53798]
+        udp_ports = [4789, 51820, 500, 4500, 8472, 9992, 53787, 53789, 53797, 53799]
         cmds = []
         for p_ in tcp_ports:
             cmds.append(f"ufw allow {p_}/tcp 2>/dev/null || true")

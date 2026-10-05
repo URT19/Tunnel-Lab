@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core.config import Config
 from ui.dashboard import DashboardApp
 
-VERSION = "9.7.0"
+VERSION = "9.10.3"
 
 
 def main():

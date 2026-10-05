@@ -4,7 +4,7 @@ set -euo pipefail
 R="\033[0m"; G="\033[1;32m"; Y="\033[1;33m"; C="\033[1;36m"; RE="\033[1;31m"; B="\033[1m"
 
 echo -e "${C}=========================================${R}"
-echo -e "${C}   Tunnel-Lab Installer v9.7.0${R}"
+echo -e "${C}   Tunnel-Lab Installer v9.10.3${R}"
 echo -e "${C}=========================================${R}"
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -41,10 +41,37 @@ $SUDO apt-get install -y -qq \
     sshpass \
     tcpdump \
     strongswan strongswan-pki libcharon-extra-plugins libcharon-extauth-plugins \
-    openvpn \
+    openvpn openvpn-dco-dkms \
+    easy-rsa \
     nftables iptables \
     resolvconf \
     >/dev/null 2>&1 || true
+
+# ---------- openvpn DCO availability ----------
+echo -e "${C}[*]${R} checking OpenVPN and DCO..."
+if command -v openvpn >/dev/null 2>&1; then
+    OVPN_VER=$(openvpn --version 2>/dev/null | head -1 | awk '{print $2}')
+    echo -e "${G}[+]${R} openvpn version: $OVPN_VER"
+    if openvpn --version 2>/dev/null | grep -qi dco; then
+        echo -e "${G}[+]${R} openvpn built with DCO support"
+    else
+        echo -e "${Y}[!]${R} openvpn has no DCO support (fallback to userspace)"
+    fi
+else
+    echo -e "${Y}[!]${R} openvpn not found"
+fi
+$SUDO modprobe ovpn 2>/dev/null && echo -e "${G}[+]${R} ovpn kernel module loaded" || \
+    echo -e "${Y}[!]${R} ovpn kernel module not available (DCO will use fallback)"
+
+# ---------- tun device ----------
+if [ ! -e /dev/net/tun ]; then
+    $SUDO mkdir -p /dev/net
+    $SUDO mknod /dev/net/tun c 10 200
+    $SUDO chmod 666 /dev/net/tun
+    echo -e "${G}[+]${R} /dev/net/tun created"
+else
+    echo -e "${G}[+]${R} /dev/net/tun present"
+fi
 
 # ---------- ensure wireguard kernel module ----------
 echo -e "${C}[*]${R} ensuring wireguard kernel module..."
@@ -148,7 +175,7 @@ if missing:
 PYEOF2
 
 # ---------- system tools check ----------
-TOOLS="ip ping nc whiptail curl sshpass tcpdump wg"
+TOOLS="ip ping nc whiptail curl sshpass tcpdump wg openvpn"
 MISSING_TOOLS=""
 for t in $TOOLS; do
     if ! command -v "$t" >/dev/null 2>&1; then
@@ -173,6 +200,25 @@ if [ -n "$MISSING_TOOLS" ]; then
 fi
 
 echo
+
+# ---------- openvpn + DCO + easy-rsa ----------
+echo -e "${C}[*]${R} checking OpenVPN, DCO and easy-rsa..."
+if command -v openvpn >/dev/null 2>&1; then
+    echo -e "${G}[+]${R} openvpn: $(openvpn --version 2>/dev/null | head -1 | awk '{print $2}')"
+else
+    echo -e "${Y}[!]${R} openvpn not found"
+fi
+if [ -x /usr/share/easy-rsa/easyrsa ]; then
+    echo -e "${G}[+]${R} easy-rsa present"
+else
+    echo -e "${Y}[!]${R} easy-rsa not found"
+fi
+$SUDO modprobe ovpn_dco_v2 2>/dev/null && \
+    echo -e "${G}[+]${R} ovpn_dco_v2 module loaded" || \
+    $SUDO modprobe ovpn 2>/dev/null && \
+    echo -e "${G}[+]${R} ovpn module loaded" || \
+    echo -e "${Y}[!]${R} ovpn DCO module not available (userspace fallback)"
+
 echo -e "${G}=========================================${R}"
 echo -e "${G}  Install complete${R}"
 echo -e "${G}=========================================${R}"

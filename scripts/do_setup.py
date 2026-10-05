@@ -46,7 +46,7 @@ APT_PKGS = [
     "tcpdump",
     "strongswan", "strongswan-pki",
     "libcharon-extra-plugins", "libcharon-extauth-plugins",
-    "openvpn",
+    "openvpn", "openvpn-dco-dkms", "easy-rsa",
     "nftables", "iptables",
     "resolvconf",
 ]
@@ -108,6 +108,20 @@ def _verify_remote_cmds(ssh):
     return True
 
 
+def _ensure_tun_device(ssh):
+    """Make sure /dev/net/tun exists on B."""
+    rc, out, err = ssh.run(
+        "test -e /dev/net/tun && echo present || echo missing",
+        which="server_b", timeout=10,
+    )
+    if "missing" in (out or ""):
+        ssh.run("mkdir -p /dev/net; mknod /dev/net/tun c 10 200; chmod 666 /dev/net/tun; echo created",
+                which="server_b", timeout=15)
+        log("  /dev/net/tun created on B")
+    else:
+        log("  /dev/net/tun present on B")
+
+
 def _ensure_remote_dirs(ssh):
     cmd = "mkdir -p /root/tunnel-lab /root/tunnel-lab/logs /root/tunnel-lab/core /root/tunnel-lab/agents"
     ssh.run(cmd, which="server_b", timeout=15)
@@ -115,7 +129,7 @@ def _ensure_remote_dirs(ssh):
 
 def _verify_kernel_modules(ssh):
     """Load tunnel-related kernel modules on B."""
-    mods = ["wireguard", "ip_gre", "ipip", "sit", "vxlan", "tun"]
+    mods = ["wireguard", "ip_gre", "ipip", "sit", "vxlan", "tun", "ovpn", "ovpn_dco_v2"]
     cmd = "; ".join(f"modprobe {m} 2>/dev/null || true" for m in mods)
     ssh.run(cmd, which="server_b", timeout=30)
     rc, out, err = ssh.run("awk '{print $1}' /proc/modules", which="server_b", timeout=15)
@@ -185,6 +199,13 @@ def main():
     log("step 5/8  loading kernel modules on Server B")
     try:
         _verify_kernel_modules(ssh)
+    except Exception as e:
+        log(f"           WARN: {e}")
+
+    # 5b) tun device
+    log("step 5b/8 ensuring /dev/net/tun on Server B")
+    try:
+        _ensure_tun_device(ssh)
     except Exception as e:
         log(f"           WARN: {e}")
 

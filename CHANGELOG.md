@@ -538,3 +538,102 @@ Versioning: MAJOR.MINOR.PATCH
   check marks and elapsed time.
 - Two-server model: Server A (controller) + Server B (agent).
 - SSH_TUN in TEST MODE (skipped): to be finished later.
+
+## 9.8.0
+- Added three OpenVPN tunnels:
+  - openvpn_udp  (static key, UDP)
+  - openvpn_tcp  (static key, TCP)
+  - openvpn_dco  (static key, UDP + --dco)
+- DIRECT: A is server (listen), B is client.
+  Ports: 53787 (udp), 53788 (tcp), 53789 (dco).
+- REVERSE: B is server, A is client.
+  Ports: 53797 (udp), 53798 (tcp), 53799 (dco).
+- Tunnel IP: server 10.67.10.1, client 10.67.10.2.
+- No routing changes: --route-noexec, --ifconfig only.
+- Ping-only test (applicable_stages = iface_a, iface_b, icmp).
+- 5 explicit steps with log messages for easy debugging:
+  1 port free, 2 static key, 3 start openvpn,
+  4 wait iface, 5 ping over tunnel.
+- install.sh: installs openvpn, openvpn-dco-dkms, easy-rsa;
+  checks DCO support; creates /dev/net/tun if missing.
+- SYNC: adds tun device and ovpn module checks on B.
+
+## 9.8.1
+- OpenVPN: add explicit --cipher AES-256-CBC and
+  --data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC.
+  OpenVPN 2.6 dropped BF-CBC as default, causing
+  "Cipher BF-CBC not supported" fatal error.
+
+## 9.8.2
+- Firewall: open OpenVPN ports on both A and B:
+  udp/53787, udp/53789, udp/53797, udp/53799,
+  tcp/53788, tcp/53798.
+- This was the cause of "ping over tunnel doesn't work"
+  while ifaces were up.
+
+## 9.8.3
+- OpenVPN client now uses --nobind.
+- OpenVPN setup opens all 6 ports (udp+tcp) on A and B
+  before starting, so iptables policy DROP doesn't block them.
+
+## 9.8.4
+- OpenVPN DCO: marked as skipped. DCO in OpenVPN 2.6 requires
+  TLS mode with certificates (not static-key), which is out of
+  scope for now. The tunnel appears in results as skipped.
+
+## 9.9.0
+- OpenVPN DCO: full TLS + PKI implementation using easy-rsa.
+- Auto-generates CA + server + client certs on A, pushes them to B.
+- DIRECT: A server (port 53789/udp), B client.
+- REVERSE: B server (port 53799/udp), A client.
+- Tunnel IPs: server 10.67.11.1, client 10.67.11.2.
+- 5 step debug logs (port, PKI, start, iface, ping).
+- install.sh + do_setup.py: add easy-rsa.
+
+## 9.9.1
+- OpenVPN DCO: aggressive cleanup. Kill openvpn, then reload the
+  ovpn_dco_v2 kernel module to release a stale DCO device.
+  Plain "ip link del" alone leaves a stuck DCO device.
+
+## 9.9.2
+- OpenVPN DCO: unique device name per run (tlab-dco-<port>-<ts>)
+  to avoid stale DCO devices that ip link del can't remove.
+- Cleanup removes all tlab-dco-* devices on both sides.
+
+## 9.9.3
+- OpenVPN DCO: fixed interface name length (Linux max = 15).
+  Uses short unique names like dco53789001.
+- Confirmed working: DIRECT iface_a + iface_b + icmp all pass.
+
+## 9.10.0
+- Stable release with 10 tunnels:
+  - Kernel: GRE, GRETAP, IPIP, SIT, VXLAN
+  - WireGuard (L3 VPN, preshared key)
+  - SSH_TUN (SSH local port forwarding, TEST MODE)
+  - OpenVPN UDP (static key)
+  - OpenVPN TCP (static key)
+  - OpenVPN DCO (TLS + auto PKI via easy-rsa)
+- install.sh: adds openvpn, openvpn-dco-dkms, easy-rsa,
+  checks DCO module availability.
+- SYNC Servers: installs openvpn and easy-rsa on B,
+  loads ovpn_dco_v2 module, creates /dev/net/tun if missing.
+- Firewall: opens OpenVPN ports (udp 53787/53789/53797/53799,
+  tcp 53788/53798) on both A and B.
+
+## 9.10.1
+- OpenVPN DCO: cleanup now matches all possible stale device names
+  (dco<port>, tlab-dco*, tlab-ovpn*). Fixes DIRECT failure when a
+  zombie DCO device from an earlier run was left on A.
+
+## 9.10.2
+- Final stable release.
+- All 10 tunnels working end-to-end:
+  GRE, GRETAP, IPIP, SIT, VXLAN, WireGuard,
+  OpenVPN UDP, OpenVPN TCP, OpenVPN DCO, SSH_TUN (test mode).
+- OpenVPN DCO: fixed stale device cleanup across all naming patterns.
+
+## 9.10.3
+- Final release.
+- All 10 tunnels verified end-to-end on real servers:
+  GRE, GRETAP, IPIP, SIT, VXLAN, WireGuard,
+  OpenVPN UDP, OpenVPN TCP, OpenVPN DCO, SSH_TUN (test mode).

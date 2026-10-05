@@ -1,6 +1,6 @@
 # Tunnel-Lab
 
-Version: 9.7.0
+Version: 9.10.3
 
 Test which tunneling protocols actually work between two Ubuntu 24.04
 servers. Built for servers behind restrictive networks (e.g. Iranian
@@ -16,10 +16,13 @@ servers where SSH/ICMP/UDP/TCP may be filtered differently).
   3. runs DIRECT (A -> B) and REVERSE (B -> A) payload tests,
   4. reports per-direction, per-stage results with colored check marks.
 
-Supported tunnels (v9.7.0):
+Supported tunnels (v9.10.0):
 - GRE, GRETAP, IPIP, SIT (kernel L3/L2)
 - VXLAN (kernel L2 over UDP)
 - WireGuard (L3 VPN, preshared key)
+- OpenVPN UDP (static key, ports 53787/53797)
+- OpenVPN TCP (static key, ports 53788/53798)
+- OpenVPN DCO (TLS + auto PKI via easy-rsa, ports 53789/53799)
 - SSH_TUN (SSH local port forwarding, currently in TEST MODE)
 
 ## Requirements
