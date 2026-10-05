@@ -1,4 +1,4 @@
-version: 9.2.0
+version: 9.7.0
 server_a:
   host: ""
   ssh_port: 22

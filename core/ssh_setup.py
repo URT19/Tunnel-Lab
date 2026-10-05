@@ -225,7 +225,17 @@ class SSHSetup:
         return out.strip()
 
     def stop_agent(self):
-        self.run("pkill -f 'agents.runner' || true", which="server_b")
+        # kill all agents and wait for the port to free up
+        self.run(
+            "pkill -9 -f 'agents.runner' 2>/dev/null || true; "
+            "sleep 1; "
+            "for i in 1 2 3 4 5; do "
+            "  ss -tlnp 2>/dev/null | grep -q ':51888 ' || break; "
+            "  sleep 1; "
+            "done; echo stopped",
+            which="server_b",
+            timeout=15,
+        )
 
     def tail_agent_log(self, n=30, remote_dir=None):
         remote_dir = remote_dir or self.remote_dir

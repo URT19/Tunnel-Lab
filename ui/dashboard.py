@@ -12,7 +12,6 @@ from textual.screen import Screen
 from textual.binding import Binding
 
 from core.channel import bus_tail
-from ui.config_screen import edit_server_interactive
 
 def shutil_which(cmd):
     import shutil
@@ -47,6 +46,24 @@ def _stage_mark(v):
     if v is False:
         return CROSS
     return DOT
+
+
+class VersionBar(Static):
+    def __init__(self, app_ref):
+        super().__init__()
+        self.app_ref = app_ref
+
+    def render(self):
+        import time
+        a_v = self.app_ref.status.get("a_version", "?")
+        b_v = self.app_ref.status.get("b_version", "?")
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        return (
+            f"[bold cyan]Tunnel Lab v{self.app_ref.version}[/bold cyan]"
+            f"   [dim]A: v{a_v}[/dim]"
+            f"   [dim]B: v{b_v}[/dim]"
+            f"   [dim]{now}[/dim]"
+        )
 
 
 class LogoBox(Static):
@@ -359,6 +376,8 @@ class Dashboard(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        with Vertical(id="rowversion"):
+            yield VersionBar(self.app_ref)
         with Vertical(id="rowlogo"):
             yield LogoBox(self.app_ref)
         with Horizontal(id="row1"):
@@ -410,32 +429,12 @@ class Dashboard(Screen):
     def action_cfg_a(self): self._nano_edit("server_a")
     def action_cfg_b(self): self._nano_edit("server_b")
 
-    def _edit_server(self, which, label):
-        import time
-        base = Path.cwd()
-        from core.config import Config
-        # exit Textual first
-        self.app.exit()
-        # give Textual time to release the terminal
-        time.sleep(0.5)
-        # reset terminal just in case
-        try:
-            subprocess.call(["stty", "sane"])
-        except Exception:
-            pass
-        cfg = Config(base / "config.yaml")
-        ok = edit_server_interactive(cfg, which, label)
-        if ok:
-            print(f"[+] {which} saved")
-        else:
-            print(f"[i] {which} unchanged")
-        print("[i] restart with ./run.sh")
 
     def action_cfg_a(self):
-        self._edit_server("server_a", "Server A")
+        self.wlog("[yellow]use ./menu.sh (option 1) for config[/yellow]")
 
     def action_cfg_b(self):
-        self._edit_server("server_b", "Server B")
+        self.wlog("[yellow]use ./menu.sh (option 2) for config[/yellow]")
 
     def action_setup(self): self._spawn("do_setup.py", "setup")
     def action_run(self): self._spawn("do_run.py", "run tests")
@@ -597,6 +596,7 @@ class Dashboard(Screen):
 
     def _repaint(self):
         try:
+            self.query_one(VersionBar).refresh()
             self.query_one(LogoBox).refresh()
             self.query_one(BoxServerA).refresh()
             self.query_one(BoxServerB).refresh()
@@ -607,6 +607,7 @@ class Dashboard(Screen):
 class DashboardApp(TApp):
     CSS = """
     Screen { layout: vertical; }
+    #rowversion { height: 1; padding: 0 1; }
     #rowlogo { height: 9; border: round cyan; padding: 0 1; }
     #row1 { height: 5; }
     #sa { width: 50%; border: round green; padding: 0 1; }

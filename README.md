@@ -1,9 +1,10 @@
 # Tunnel-Lab
 
-Test which tunneling protocols actually work between two Ubuntu 24.04
-servers, especially useful for servers behind restrictive networks.
+Version: 9.7.0
 
-Version: 9.2.0
+Test which tunneling protocols actually work between two Ubuntu 24.04
+servers. Built for servers behind restrictive networks (e.g. Iranian
+servers where SSH/ICMP/UDP/TCP may be filtered differently).
 
 ## What it does
 
@@ -12,17 +13,21 @@ Version: 9.2.0
 - For each selected tunnel it:
   1. configures the tunnel on both sides,
   2. verifies interface and routing,
-  3. sends ICMP, TCP and UDP payload A -> B (DIRECT),
-  4. tears down, configures again with B initiating,
-  5. sends ICMP, TCP and UDP payload B -> A (REVERSE),
-  6. reports per-side, per-tunnel results with hints.
+  3. runs DIRECT (A -> B) and REVERSE (B -> A) payload tests,
+  4. reports per-direction, per-stage results with colored check marks.
+
+Supported tunnels (v9.7.0):
+- GRE, GRETAP, IPIP, SIT (kernel L3/L2)
+- VXLAN (kernel L2 over UDP)
+- WireGuard (L3 VPN, preshared key)
+- SSH_TUN (SSH local port forwarding, currently in TEST MODE)
 
 ## Requirements
 
 - Two Ubuntu 24.04 servers with root SSH access.
 - Server A: the machine you run the app on.
 - Server B: reachable from A via SSH.
-- Both servers must be able to reach each other on their public IPs.
+- Both servers able to reach each other on their public IPs.
 
 ## Install
 
@@ -31,73 +36,68 @@ Version: 9.2.0
     ./install.sh
 
 The installer:
-- installs system packages (iproute2, wireguard-tools, paramiko, etc.),
-- creates a .venv if system python packages are too old,
+- installs system packages (iproute2, wireguard-tools, strongswan,
+  openvpn, whiptail, sshpass, tcpdump, etc.),
+- creates a .venv if the system python packages are too old,
 - generates run.sh.
 
 ## Run
 
-Preferred (menu-based, arrow keys, paste-friendly):
+Menu (arrow keys, paste-friendly):
 
     ./menu.sh
 
-Alternative (Textual UI):
+Textual live dashboard:
 
     ./run.sh
 
+## First-time setup (in ./menu.sh)
 
-## First-time setup (in the UI)
-
-1. "Configure servers"
-   - Two columns: SERVER A and SERVER B.
-   - Fields: host, user, ssh_port, auth, password, key_path.
-   - Use the "Detect public IP" button for Server A (works even on
-     filtered servers, because it reads the local interface, not an
-     external service).
-   - Tab between fields. Ctrl+S to save. Esc to save and go back.
-
-2. "SYNC Servers channel"
-   - Deploys the agent to Server B, starts it, opens the Control Channel.
-   - You should see "channel ready" in the log.
-
+1. "Configure Server A" and "Configure Server B"
+   - Field by field, with defaults (user=root, ssh_port=22).
+2. "SYNC Servers"
+   - Provisions Server B (installs packages, loads modules,
+     deploys the agent, opens firewall), then reports A/B versions.
 3. "Select tunnels"
-   - Move with up/down arrows.
-   - Space to toggle, A = all, N = none.
-   - Esc to go back.
-
+   - Space toggles, A=all, N=none.
 4. "Run tests"
-   - Runs each selected tunnel in DIRECT and REVERSE mode.
-   - Shows per-stage results and hints for failures.
+   - Runs each tunnel in DIRECT and REVERSE mode.
+   - Colored boxes with per-stage check marks.
 
 Results are saved to results/summary-<session>.json
 Logs are in logs/session-<session>.log
 
-## Navigation keys
+## Menu keys
 
-- Main menu: up/down, Enter, Q to quit
-- Config: Tab between fields, Enter save, Esc back
-- Tunnel select: up/down, Space toggle, A all, N none, Esc back
-- Run screen: Esc back, Ctrl+C exit
+- Main: type the number, no Enter needed.
+- Tunnel select: up/down, Space toggle, A all, N none, Enter save.
+- Dashboard: 1..9 for actions, r refresh, l toggle log, q quit.
 
 ## Adding a new tunnel
 
-See ARCHITECTURE.md section 6.
+Create tunnels/mytunnel.py:
 
-Short version:
-1. Create tunnels/mytunnel.py with class MyTunnel(TunnelModule).
-2. Implement commands_for_a, commands_for_b, cleanup_commands_a/b.
-3. Run. It appears in the list automatically.
+    from tunnels.base import TunnelModule
 
-## Troubleshooting
+    class MyTunnel(TunnelModule):
+        id = "mytunnel"
+        name = "My Tunnel"
+        category = "Kernel"
+        applicable_stages = ("iface_a", "iface_b", "icmp", "tcp", "udp")
 
-- "externally-managed-environment" from pip:
-  use ./install.sh which handles it automatically.
-- Textual import error:
-  rerun ./install.sh, it will rebuild the venv with textual >= 0.60.
-- Agent not reachable:
-  check that Server B allows incoming on the agent port (default random).
-  check /root/tunnel-lab/agent.log on Server B.
+        def commands_for_a(self, ctx):  return [...]
+        def commands_for_b(self, ctx):  return [...]
+        def cleanup_commands_a(self, ctx): return [...]
+        def cleanup_commands_b(self, ctx): return [...]
+
+For non-standard tunnels, override run_direct / run_reverse directly.
+
+No changes to core/orchestrator.py are needed. See ARCHITECTURE.md.
 
 ## Versioning
 
-See CHANGELOG.md. Current: 0.4.1.
+See CHANGELOG.md. Current: 9.7.0.
+
+## License
+
+MIT (or specify your license here).

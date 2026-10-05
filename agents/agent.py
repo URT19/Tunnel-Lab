@@ -1,10 +1,13 @@
-import socket, json, threading, subprocess, time
+import os
+import signal
+import socket
+import subprocess
+import threading
+import time
+import json
+
 from core.protocol import pack, unpack_header
 from agents.commands import WHITELIST, is_safe_raw
-from core.payload import (
-    tcp_receiver, udp_receiver, tcp_send, udp_send, make_payload,
-    tcp6_receiver, udp6_receiver, tcp6_send, udp6_send,
-)
 
 
 class Agent:
@@ -19,7 +22,7 @@ class Agent:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((self.host, self.port))
-        s.listen(4)
+        s.listen(8)
         self.port = s.getsockname()[1]
         with open(self.port_file, "w") as f:
             f.write(str(self.port))
@@ -51,7 +54,6 @@ class Agent:
                         continue
                     if self.log:
                         self.log.event("agent.recv", msg)
-                    # run non-blocking dispatch
                     threading.Thread(
                         target=self._dispatch_and_reply,
                         args=(conn, msg),
@@ -103,18 +105,21 @@ class Agent:
             return {"type": "PROBE_RESULT", "ok": rc == 0, "ip": ip}
 
         if t == "RECV_TCP":
+            from core.payload import tcp_receiver
             port = int(msg.get("port", 0))
             timeout = float(msg.get("timeout", 20))
             res = tcp_receiver(port, timeout=timeout)
             return {"type": "RECV_TCP_RESULT", **res}
 
         if t == "RECV_UDP":
+            from core.payload import udp_receiver
             port = int(msg.get("port", 0))
             timeout = float(msg.get("timeout", 20))
             res = udp_receiver(port, timeout=timeout)
             return {"type": "RECV_UDP_RESULT", **res}
 
         if t == "SEND_TCP":
+            from core.payload import tcp_send, make_payload
             host = msg.get("host", "")
             port = int(msg.get("port", 0))
             tunnel = msg.get("tunnel", "x")
@@ -124,6 +129,7 @@ class Agent:
             return {"type": "SEND_TCP_RESULT", **res}
 
         if t == "SEND_UDP":
+            from core.payload import udp_send, make_payload
             host = msg.get("host", "")
             port = int(msg.get("port", 0))
             tunnel = msg.get("tunnel", "x")
@@ -133,18 +139,21 @@ class Agent:
             return {"type": "SEND_UDP_RESULT", **res}
 
         if t == "RECV_TCP6":
+            from core.payload import tcp6_receiver
             port = int(msg.get("port", 0))
             timeout = float(msg.get("timeout", 20))
             res = tcp6_receiver(port, timeout=timeout)
             return {"type": "RECV_TCP6_RESULT", **res}
 
         if t == "RECV_UDP6":
+            from core.payload import udp6_receiver
             port = int(msg.get("port", 0))
             timeout = float(msg.get("timeout", 20))
             res = udp6_receiver(port, timeout=timeout)
             return {"type": "RECV_UDP6_RESULT", **res}
 
         if t == "SEND_TCP6":
+            from core.payload import tcp6_send, make_payload
             host = msg.get("host", "")
             port = int(msg.get("port", 0))
             tunnel = msg.get("tunnel", "x")
@@ -154,6 +163,7 @@ class Agent:
             return {"type": "SEND_TCP6_RESULT", **res}
 
         if t == "SEND_UDP6":
+            from core.payload import udp6_send, make_payload
             host = msg.get("host", "")
             port = int(msg.get("port", 0))
             tunnel = msg.get("tunnel", "x")
@@ -164,6 +174,31 @@ class Agent:
 
         return {"type": "ERROR", "reason": "UNKNOWN_TYPE", "type": t}
 
-    def _run(self, cmd):
-        p = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
-        return p.returncode, p.stdout, p.stderr
+    def _run(self, cmd, timeout=30):
+        """Run cmd in its own process group. Kill the WHOLE group on timeout."""
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                text=True,
+            )
+        except Exception as e:
+            return 1, "", str(e)
+
+        try:
+            out, err = proc.communicate(timeout=timeout)
+            return proc.returncode, out or "", err or ""
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                out, err = proc.communicate(timeout=2)
+            except Exception:
+                out, err = "", ""
+            return 124, out or "", (err or "") + "\n[TIMEOUT]"

@@ -8,6 +8,8 @@ def load_all():
         name = f.stem
         if name in ("__init__", "base", "registry"):
             continue
+        if name.startswith("_"):
+            continue
         try:
             m = importlib.import_module(f"tunnels.{name}")
         except Exception:

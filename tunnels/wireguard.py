@@ -1,37 +1,47 @@
-from tunnels.base import TunnelModule
+from tunnels._wg_base import WireGuardBase
 
-class WireGuard(TunnelModule):
+
+class WireGuard(WireGuardBase):
     id = "wireguard"
     name = "WireGuard"
-    category = "VPN"
-    description = "Modern UDP VPN"
+    description = "WireGuard tunnel with preshared key (A and B initiate)"
+    applicable_stages = ("iface_a", "iface_b", "icmp")
 
-    def commands_for_a(self, ctx):
-        i = ctx.interface_name
-        return [
-            f"mkdir -p /etc/wireguard && chmod 700 /etc/wireguard",
-            f"[ -f /etc/wireguard/{i}.key ] || (wg genkey | tee /etc/wireguard/{i}.key | wg pubkey > /etc/wireguard/{i}.pub)",
-            f"ip link del {i} 2>/dev/null || true",
-            f"ip link add dev {i} type wireguard",
-            f"wg set {i} private-key /etc/wireguard/{i}.key listen-port 51820",
-            f"ip addr add {ctx.tunnel_local_ip}/30 dev {i}",
-            f"ip link set {i} up",
-        ]
+    def _bring_up(self, ctx, orch):
+        a_priv, a_pub, a_psk = self._gen_keys_local()
+        b_priv, b_pub, b_psk = self._gen_keys_remote(orch)
+        if not (a_priv and b_pub and a_psk and b_psk):
+            return False
+        psk = a_psk
+        self._wg_up_a(orch, a_priv, b_pub, psk, self.PEER_B,
+                      self.NET_A, f"{ctx.server_b_ip}:{self.WG_PORT}")
+        self._wg_up_b(orch, b_priv, a_pub, psk, self.PEER_A,
+                      self.NET_B, f"{ctx.server_a_ip}:{self.WG_PORT}")
+        orch.sleep(2.5)
+        return True
 
-    def commands_for_b(self, ctx):
-        i = ctx.interface_name
-        return [
-            f"mkdir -p /etc/wireguard && chmod 700 /etc/wireguard",
-            f"[ -f /etc/wireguard/{i}.key ] || (wg genkey | tee /etc/wireguard/{i}.key | wg pubkey > /etc/wireguard/{i}.pub)",
-            f"ip link del {i} 2>/dev/null || true",
-            f"ip link add dev {i} type wireguard",
-            f"wg set {i} private-key /etc/wireguard/{i}.key listen-port 51820",
-            f"ip addr add {ctx.tunnel_remote_ip}/30 dev {i}",
-            f"ip link set {i} up",
-        ]
+    def run_direct(self, ctx, orch):
+        stages = {"iface_a": False, "iface_b": False, "icmp": False}
+        if not self._bring_up(ctx, orch):
+            return stages
 
-    def cleanup_commands_a(self, ctx):
-        return [f"ip link del {ctx.interface_name} 2>/dev/null || true"]
+        stages["iface_a"] = self._iface_up_a(orch)
+        stages["iface_b"] = self._iface_up_b(orch)
+        if not (stages["iface_a"] and stages["iface_b"]):
+            return stages
 
-    def cleanup_commands_b(self, ctx):
-        return [f"ip link del {ctx.interface_name} 2>/dev/null || true"]
+        stages["icmp"] = self._ping_a_to_b(orch)
+        return stages
+
+    def run_reverse(self, ctx, orch):
+        stages = {"iface_a": False, "iface_b": False, "icmp": False}
+        if not self._bring_up(ctx, orch):
+            return stages
+
+        stages["iface_a"] = self._iface_up_a(orch)
+        stages["iface_b"] = self._iface_up_b(orch)
+        if not (stages["iface_a"] and stages["iface_b"]):
+            return stages
+
+        stages["icmp"] = self._ping_b_to_a(orch)
+        return stages

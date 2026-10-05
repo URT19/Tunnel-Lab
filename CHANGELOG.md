@@ -381,3 +381,160 @@ Versioning: MAJOR.MINOR.PATCH
 - REVERSE : A listens on 19999, B: ssh -L 19998->A:19999, payload verified.
 - Removed all SOCKS5 code paths.
 - Cleaned up: core/socks.py and tunnels/socks5.py removed.
+
+## 9.3.0
+- Modular architecture: tunnel modules are self-contained.
+- TunnelModule contract: setup/teardown/run_direct/run_reverse.
+- Adding a new tunnel = one file in tunnels/, no changes to orchestrator.
+- orchestrator.py only exposes helpers.
+- SSH_TUN rewritten as a fully self-contained module (ssh -L).
+
+## 9.3.1
+- orchestrator.cleanup_stale(): kills leftover nc/ssh -L/ports on both
+  sides before every test, so agents don't get stuck.
+- ssh_tun: uses setsid for remote nc, Popen(start_new_session=True) for
+  local nc, and sleeps after starting to avoid races.
+
+## 9.3.2
+- menu.sh: version and date shown at the top-left of the main menu.
+
+## 9.3.3
+- Dashboard: VersionBar at the very top shows Tunnel Lab version,
+  Server A and B versions, and current date/time.
+
+## 9.3.3
+- Dashboard: VersionBar at the very top shows Tunnel Lab version,
+  Server A and B versions, and current date/time.
+
+## 9.4.0
+- TunnelModule.applicable_stages defines which test stages apply.
+- SSH_TUN: applicable_stages = (iface_a, iface_b, tcp) — ICMP and UDP
+  are shown as "–" because ssh -L only forwards TCP.
+- phase_ok honors applicable_stages for both PASS/FAIL and the report.
+- formatter renders "–" for non-applicable cells.
+
+## 9.4.2
+- ssh_tun: cleaned ports/files before each phase.
+- ssh_tun: uses ss grep with word boundary for port checks.
+- ssh_tun: waits up to 6s for listeners, logs received payload.
+- ssh_tun: increased flush wait to 1.5s.
+
+## 9.4.3
+- install.sh: adds wireguard-tools, wireguard, wireguard-dkms (fallback),
+  and resolvconf. Loads the wireguard kernel module at install time.
+- Verifies wg and wireguard module presence.
+- ssh_tun put in TEST MODE (skipped).
+
+## 9.5.0
+- WireGuard: two modular tunnels.
+  - wg_direct_a: A is initiator (A client, B server).
+  - wg_direct_b: B is initiator (B client, A server).
+- Table = off: manual routes, no wg-quick.
+- Keys generated and exchanged over the control channel.
+- IP addresses: A=10.66.10.1/32, B=10.66.10.2/32.
+- Test includes: iface up, handshake, ICMP over tunnel, TCP payload
+  from A->B and B->A.
+- tunnels/wireguard.py removed (replaced by the two new modules).
+
+## 9.5.1
+- do_setup.py shows versions before and after sync:
+  Local (A) version, Remote (B) version before sync, Remote (B) version
+  after sync, and warns if they differ.
+- do_setup.py checks and installs required tools on B:
+  ip, ping, nc, wg, tcpdump, curl, wget, sshpass, iptables.
+
+## 9.5.2
+- SYNC Servers now fully provisions Server B in 8 steps:
+  1 ssh check, 2 python3, 3 apt packages (python, iproute2,
+  netcat, wireguard, whiptail, curl, sshpass, tcpdump, strongswan,
+  openvpn, iptables, nftables), 4 verify commands, 5 load kernel
+  modules (wireguard, ip_gre, ipip, sit, vxlan, tun), 6 dirs,
+  7 bundle upload + firewall, 8 agent + channel.
+- Shows A/B versions before and after sync.
+
+## 9.5.3
+- Merged wg_direct_a and wg_direct_b into a single wireguard.py:
+  - DIRECT  : A is the initiator (A client, B server).
+  - REVERSE : B is the initiator (B client, A server).
+- Removed wg_direct_a.py and wg_direct_b.py.
+
+## 9.5.4
+- registry.py ignores files starting with "_" (e.g. _wg_base.py).
+- WireGuardBase sets empty id/name, so it never appears as a tunnel.
+
+## 9.5.5
+- Fixed agent hang: _run uses Popen + process-group kill on timeout.
+  This fixes the "no response for RUN" issue seen with which, lsmod,
+  mkdir && chmod, etc.
+- WireGuard rewritten based on angristan/wireguard-install pattern:
+  - PresharedKey support (PSK generated on both sides).
+  - PersistentKeepalive 25.
+  - Keys stored under /etc/wireguard/tlab-wg-{a,b}/.
+  - Table = off: manual routes, no wg-quick.
+  - list of safe shell prefixes expanded in agents/commands.py.
+
+## 9.5.6
+- Replace lsmod with cat /proc/modules (lsmod hangs on some VPS).
+- WireGuard setup loads the wireguard module on both sides first.
+
+## 9.5.7
+- Fix WireGuard hang on B: the preshared key file was missing,
+  so `wg set ... preshared-key FILE` blocked waiting on stdin.
+  Now the psk is written to /etc/wireguard/tlab-wg-b/psk.key
+  before wg set is called.
+
+## 9.5.8
+- Removed all "umask 077" from WireGuard and other modules.
+  On some Ubuntu/agent combinations, "umask" causes the shell
+  to hang under subprocess.run.
+- File permissions are set explicitly with chmod 600 instead.
+
+## 9.5.9
+- WireGuard: add the /32 route AFTER "ip link set up"
+  and use "ip route replace" instead of "add".
+
+## 9.5.10
+- menu.sh: skip tunnel files starting with "_" (e.g. _wg_base.py).
+
+## 9.5.11
+- WireGuard: use /24 addresses instead of /32.
+  The kernel then picks the tunnel source correctly and adds the
+  subnet route automatically.
+
+## 9.6.0
+- WireGuard: only test iface + icmp (ping over the tunnel).
+  WireGuard is L3; if ping works, TCP/UDP work too.
+- Removed TCP/UDP stages from wireguard.
+
+## 9.6.1
+- Fix: applicable_stages was missing from tunnels/base.py
+  after the compact rewrite. Added back.
+
+## 9.6.2
+- tunnels/base.py: TunnelModule now defines applicable_stages
+  as a class attribute so all subclasses inherit it.
+
+## 9.7.0
+- Stable release with 7 working tunnels:
+  - GRE, GRETAP, IPIP, SIT (kernel L3/L2)
+  - VXLAN (kernel L2 over UDP)
+  - WireGuard (L3 VPN with preshared key)
+  - SSH_TUN (SSH local port forwarding, TCP only)
+- Modular architecture: each tunnel is a self-contained file in
+  tunnels/, no changes to core/orchestrator.py required to add one.
+- TunnelModule contract: setup/teardown/run_direct/run_reverse.
+- applicable_stages declares which test stages apply.
+- Agent: runs commands in detached process group, safe against
+  hanging children (nc, ssh -L).
+- Agent: whitelist of safe command prefixes.
+- SYNC Servers: provisions Server B (apt packages, kernel modules,
+  dirs, agent) and reports versions before and after sync.
+- Firewall: opens control port and all common tunnel ports on A and B.
+- install.sh: installs everything needed (python3, paramiko, textual,
+  wireguard, strongswan, openvpn, iproute2, whiptail, etc).
+- export.sh: creates a clean public tarball, strips logs and
+  config.yaml secrets, scans for leaked IPs and passwords.
+- Result formatter: colored boxes with per-direction, per-stage
+  check marks and elapsed time.
+- Two-server model: Server A (controller) + Server B (agent).
+- SSH_TUN in TEST MODE (skipped): to be finished later.

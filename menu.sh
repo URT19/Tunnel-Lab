@@ -149,6 +149,7 @@ select_tunnels() {
         local name
         name=$(basename "$f" .py)
         case "$name" in __init__|base|registry) continue ;; esac
+        case "$name" in _*) continue ;; esac
         items+=("$name" "" "off")
     done
 

@@ -4,7 +4,7 @@ set -euo pipefail
 R="\033[0m"; G="\033[1;32m"; Y="\033[1;33m"; C="\033[1;36m"; RE="\033[1;31m"; B="\033[1m"
 
 echo -e "${C}=========================================${R}"
-echo -e "${C}   Tunnel-Lab Installer v9.2.0${R}"
+echo -e "${C}   Tunnel-Lab Installer v9.7.0${R}"
 echo -e "${C}=========================================${R}"
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -35,7 +35,7 @@ $SUDO apt-get install -y -qq \
     python3 python3-pip python3-venv python3-full \
     python3-paramiko python3-yaml \
     iproute2 iputils-ping netcat-openbsd \
-    wireguard-tools \
+    wireguard-tools wireguard \
     whiptail \
     curl wget \
     sshpass \
@@ -43,7 +43,27 @@ $SUDO apt-get install -y -qq \
     strongswan strongswan-pki libcharon-extra-plugins libcharon-extauth-plugins \
     openvpn \
     nftables iptables \
+    resolvconf \
     >/dev/null 2>&1 || true
+
+# ---------- ensure wireguard kernel module ----------
+echo -e "${C}[*]${R} ensuring wireguard kernel module..."
+$SUDO modprobe wireguard 2>/dev/null && echo -e "${G}[+]${R} wireguard module loaded" || \
+    echo -e "${Y}[!]${R} could not load wireguard module (may already be built-in)"
+
+if lsmod 2>/dev/null | grep -q wireguard || [ -d /sys/module/wireguard ]; then
+    echo -e "${G}[+]${R} wireguard module present"
+else
+    echo -e "${Y}[!]${R} wireguard module not visible, trying dkms..."
+    $SUDO apt-get install -y -qq wireguard-dkms 2>/dev/null || true
+fi
+
+# ---------- ensure wg tool ----------
+if command -v wg >/dev/null 2>&1; then
+    echo -e "${G}[+]${R} wg: $(wg --version 2>/dev/null || echo ok)"
+else
+    echo -e "${Y}[!]${R} wg command not found"
+fi
 
 # ---------- check python3 ----------
 if ! command -v python3 >/dev/null 2>&1; then
@@ -128,7 +148,7 @@ if missing:
 PYEOF2
 
 # ---------- system tools check ----------
-TOOLS="ip ping nc whiptail curl sshpass tcpdump"
+TOOLS="ip ping nc whiptail curl sshpass tcpdump wg"
 MISSING_TOOLS=""
 for t in $TOOLS; do
     if ! command -v "$t" >/dev/null 2>&1; then

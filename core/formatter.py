@@ -18,10 +18,13 @@ def _mark(v):
     return Text("\u00b7", style="dim")
 
 
-def _phase_ok(stages):
+def _phase_ok(stages, applicable=None):
     if not stages:
         return False
-    return all(stages.get(k, False) for k in ("iface_a", "iface_b", "tcp", "udp"))
+    if applicable is None:
+        applicable = ("iface_a", "iface_b", "icmp", "tcp", "udp")
+    mandatory = [k for k in ("iface_a", "iface_b", "tcp", "udp") if k in applicable]
+    return all(stages.get(k, False) for k in mandatory)
 
 
 def render_tunnel(result, elapsed=None):
@@ -53,16 +56,24 @@ def render_tunnel(result, elapsed=None):
     table.add_column("UDP", justify="center", no_wrap=True)
     table.add_column("Result", justify="center", no_wrap=True)
 
+    applicable = result.get("applicable_stages",
+                            ("iface_a", "iface_b", "icmp", "tcp", "udp"))
+
+    def cell(key, stages):
+        if key not in applicable:
+            return Text("\u2013", style="dim")  # en-dash
+        return _mark(stages.get(key))
+
     def add_row(label, stages):
-        ok = _phase_ok(stages)
+        ok = _phase_ok(stages, applicable)
         res = Text("PASS", style="bold green") if ok else Text("FAIL", style="bold red")
         table.add_row(
             label,
-            _mark(stages.get("iface_a")),
-            _mark(stages.get("iface_b")),
-            _mark(stages.get("icmp")),
-            _mark(stages.get("tcp")),
-            _mark(stages.get("udp")),
+            cell("iface_a", stages),
+            cell("iface_b", stages),
+            cell("icmp", stages),
+            cell("tcp", stages),
+            cell("udp", stages),
             res,
         )
 
