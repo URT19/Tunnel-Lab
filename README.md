@@ -33,6 +33,8 @@ Supported tunnels (v9.10.0):
 - Both servers able to reach each other on their public IPs.
 
 ## Install
+نصب پکیج ها بسته به سرعت سرور ممکنه تا چندین دقیقه طول بکشه، منتظر تایید نصب بمانید.
+
 
     git clone https://github.com/URT19/Tunnel-Lab.git
     cd Tunnel-Lab
