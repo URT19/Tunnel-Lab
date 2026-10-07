@@ -36,6 +36,7 @@ Supported tunnels (v9.10.0):
 
     git clone https://github.com/URT19/Tunnel-Lab.git
     cd Tunnel-Lab
+    chmod +x install.sh
     ./install.sh
 
 The installer:
